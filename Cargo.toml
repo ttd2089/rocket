@@ -5,5 +5,6 @@ authors = ["ttd2089 <ttd2089@gmail.com>", "Insomniak47 <chris.nantau@gmail.com>"
 edition = "2018"
 
 [dependencies]
-notify = "4.0.16"
 clap   = "2.33.3"
+gitignore = "1.0.7"
+notify = "4.0.16"
