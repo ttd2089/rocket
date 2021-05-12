@@ -1,9 +1,11 @@
-extern crate notify;
 #[macro_use]
 extern crate clap;
+extern crate gitignore;
+extern crate notify;
 
 use clap::{App, Arg};
 use notify::{watcher, RecursiveMode, Watcher};
+use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
@@ -38,13 +40,18 @@ fn main() {
 
     let dir = matches
         .value_of("change-directory")
+        // todo: check that this is valid path and that the directory exists, right now we'll just
+        // fail when the first thing tries to use it.
         .map(|s| s.to_string())
         .or_else(|| {
             std::env::current_dir()
                 .ok()
-                .and_then(|p| p.into_os_string().into_string().ok())
+                .and_then(|p| p.to_str().map(|s| s.to_string()))
         })
         .unwrap_or(".".to_string());
+
+    let filter = gitignore_filter(&dir);
+    println!("ignoring based on {}", filter.unwrap_or("nothing, AKA not ignoring".to_string()));
 
     watch_directory(&dir);
 }
@@ -74,4 +81,29 @@ fn get_default_shell() -> String
 #[cfg(target_family = "unix")]
 fn get_default_shell() -> String {
     return "/usr/bin/env sh"
+}
+
+fn gitignore_filter(dir: &str) -> Option<String> {
+
+    // todo: is this an overridable convention we need to respect?
+    const GITIGNORE_FILENAME: &str = ".gitignore";
+
+    let mut gitignore_dir = PathBuf::from(dir);
+
+    while gitignore_dir.parent() != None {
+        // Update the dir to have the file name instead of making a copy and we'll .pop() twice to
+        // traverse upward to the parent dir.
+        gitignore_dir.push(GITIGNORE_FILENAME);
+        println!("looking for {}", gitignore_dir.to_str()
+            .expect("if you use an OS where paths aren't unicode, your mom's a hoe"));
+        let file = gitignore::File::new(gitignore_dir.as_path());
+        match file {
+            Ok(_) => return gitignore_dir.as_path().as_os_str().to_str().map(|s| s.to_string()),
+            Err(_) => {},
+        }
+        let _ = gitignore_dir.pop();
+        let _ = gitignore_dir.pop();
+    }
+
+    return None;
 }
