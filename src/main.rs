@@ -8,6 +8,7 @@ use notify::{watcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::time::Duration;
+use std::borrow::Borrow;
 
 fn main() {
     let matches = App::new("Rocket - Pocket rewritten in rust")
@@ -35,33 +36,34 @@ fn main() {
         })
         .unwrap_or(".".to_string());
 
-    let filter: Option<&dyn PathFilter> = &gitignore_filter(&dir);
-    let filter = filter.unwrap_or_else(|| &NothingFilter{});
+    let filter = gitignore_filter(&dir).unwrap_or_else(|| Box::new(NothingFilter{}));
+        
+    //let filter = filter.unwrap_or_else(|| &NothingFilter{}));
 
     watch_directory(&dir, filter);
 }
 
-fn watch_directory(dir: &str, global_filter: &dyn PathFilter) {
+fn watch_directory(dir: &str, global_filter: Box<dyn PathFilter>) {
     let (tx, rx) = channel();
 
     let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
 
     watcher.watch(dir, RecursiveMode::Recursive).unwrap();
 
-    loop {
-        match rx.recv() {
-            Ok(event) => {
-                match global_filter.exclude(event) {
-                    true => println!("ignoring {:?}", event),
-                    true => println!("caring about {:?}", event),
-                };
-            },
-            Err(e) => println!("watch error: {:?}", e),
-        }
-    }
+    // loop {
+    //     match rx.recv() {
+    //         Ok(event) => {
+    //             match global_filter.exclude(event) {
+    //                 true => println!("ignoring {:?}", event),
+    //                 true => println!("caring about {:?}", event),
+    //             };
+    //         },
+    //         Err(e) => println!("watch error: {:?}", e),
+    //     }
+    // }
 }
 
-fn gitignore_filter(dir: &str) -> Option<GitignoreFilter> {
+fn gitignore_filter(dir: &str) -> Option<Box<dyn PathFilter>> {
 
     // todo: is this an overridable convention we need to respect?
     const GITIGNORE_FILENAME: &str = ".gitignore";
@@ -76,7 +78,7 @@ fn gitignore_filter(dir: &str) -> Option<GitignoreFilter> {
             .expect("if you use an OS where paths aren't unicode, your mom's a hoe"));
         let ignorer = ignore::gitignore::Gitignore::new(gitignore_dir.as_path());
         match ignorer {
-            (ignorer, None) => return Some(GitignoreFilter{ ignorer }),
+            (ignorer, None) => return Some(Box::new(GitignoreFilter{ ignorer:  ignorer })),
             _ => {},
         }
         let _ = gitignore_dir.pop();
@@ -102,6 +104,7 @@ impl PathFilter for GitignoreFilter {
         }
     }
 }
+
 
 struct NothingFilter {}
 
