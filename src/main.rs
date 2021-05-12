@@ -30,6 +30,10 @@ fn main() {
             .short("l")
             .long("log")
             .help("Write application logs to stderr"))
+        .arg(Arg::with_name("command")
+            .index(1)
+            .value_name("command")
+            .required(true))
         .get_matches();
 
     let dir = matches
