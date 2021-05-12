@@ -36,11 +36,20 @@ fn main() {
         })
         .unwrap_or(".".to_string());
 
-    let filter = gitignore_filter(&dir).unwrap_or_else(|| Box::new(NothingFilter{}));
-        
+    //let filter = gitignore_filter(&dir).unwrap_or_else(|| Box::new(NothingFilter{}));
+    let other_filter = other_gitignore_filter(&dir);
+
+    if let Some(filter) = other_filter {
+        other_watch_directory(&dir, &filter)
+    }
+    else{
+        other_watch_directory(&dir, &NothingFilter{})
+    }
+    
     //let filter = filter.unwrap_or_else(|| &NothingFilter{}));
 
-    watch_directory(&dir, filter);
+    //watch_directory(&dir, filter);
+
 }
 
 fn watch_directory(dir: &str, global_filter: Box<dyn PathFilter>) {
@@ -86,6 +95,40 @@ fn gitignore_filter(dir: &str) -> Option<Box<dyn PathFilter>> {
     }
 
     return None;
+}
+
+fn other_gitignore_filter(dir: &str) -> Option<GitignoreFilter> {
+
+    // todo: is this an overridable convention we need to respect?
+    const GITIGNORE_FILENAME: &str = ".gitignore";
+
+    let mut gitignore_dir = PathBuf::from(dir);
+
+    while gitignore_dir.parent() != None {
+        // Update the dir to have the file name instead of making a copy and we'll .pop() twice to
+        // traverse upward to the parent dir.
+        gitignore_dir.push(GITIGNORE_FILENAME);
+        println!("looking for {}", gitignore_dir.to_str()
+            .expect("if you use an OS where paths aren't unicode, your mom's a hoe"));
+        let ignorer = ignore::gitignore::Gitignore::new(gitignore_dir.as_path());
+        match ignorer {
+            (ignorer, None) => return Some(GitignoreFilter{ ignorer:  ignorer }),
+            _ => {},
+        }
+        let _ = gitignore_dir.pop();
+        let _ = gitignore_dir.pop();
+    }
+
+    return None;
+}
+
+fn other_watch_directory<T : PathFilter>(dir: &str, global_filter: &T)
+{
+    let (tx, rx) = channel();
+
+    let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
+
+    watcher.watch(dir, RecursiveMode::Recursive).unwrap();
 }
 
 trait PathFilter {
