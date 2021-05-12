@@ -40,9 +40,13 @@ fn main() {
     let other_filter = other_gitignore_filter(&dir);
 
     if let Some(filter) = other_filter {
-        other_watch_directory(&dir, &filter)
+        let he_who_watches = HeWhoWatches { filter};
+        he_who_watches.watch_directory(&dir);
+        //other_watch_directory(&dir, &filter)
     }
     else{
+        let he_who_watches = HeWhoWatches{ filter: NothingFilter{}};
+        he_who_watches.watch_directory(&dir);
         other_watch_directory(&dir, &NothingFilter{})
     }
     
@@ -70,6 +74,30 @@ fn watch_directory(dir: &str, global_filter: Box<dyn PathFilter>) {
     //         Err(e) => println!("watch error: {:?}", e),
     //     }
     // }
+}
+
+struct HeWhoWatches<T : PathFilter>{
+    filter : T,
+}
+
+impl<T :  PathFilter> HeWhoWatches<T> {
+    fn watch_directory(self, dir: &str) {
+        let (tx, rx) = channel();
+
+        let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
+    
+        watcher.watch(dir, RecursiveMode::Recursive).unwrap();
+
+        loop {
+            match rx.recv()
+            {
+                Ok(event) => {
+                    println!("Monomorphizing the type is schwank af")   
+                }
+                Err(e) => println!("The sadness overtakes me")
+            }
+        }
+    }
 }
 
 fn gitignore_filter(dir: &str) -> Option<Box<dyn PathFilter>> {
