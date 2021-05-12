@@ -1,0 +1,8 @@
+[package]
+name = "rocket"
+version = "0.1.0"
+authors = ["ttd2089 <ttd2089@gmail.com>" ]
+edition = "2018"
+
+[dependencies]
+notify = "4.0.16"
