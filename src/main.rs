@@ -35,9 +35,7 @@ fn main() {
         })
         .unwrap_or(".".to_string());
 
-    let filter: Option<&dyn PathFilter> = &gitignore_filter(&dir);
-    let filter = filter.unwrap_or_else(|| &NothingFilter{});
-
+    let filter: &dyn PathFilter = &gitignore_filter(&dir).expect("boom");
     watch_directory(&dir, filter);
 }
 
@@ -51,13 +49,32 @@ fn watch_directory(dir: &str, global_filter: &dyn PathFilter) {
     loop {
         match rx.recv() {
             Ok(event) => {
-                match global_filter.exclude(event) {
-                    true => println!("ignoring {:?}", event),
-                    true => println!("caring about {:?}", event),
-                };
+                match get_path(&event) {
+                    Some(path) => {
+                        match global_filter.exclude(&path) {
+                            true => println!("ignoring {:?}", event),
+                            false => println!("caring about {:?}", event),
+                        };
+                    },
+                    None => println!("event had no path"),
+                }
             },
             Err(e) => println!("watch error: {:?}", e),
         }
+    }
+}
+
+fn get_path(evt: &notify::DebouncedEvent) -> Option<&Path> {
+    match evt {
+        notify::DebouncedEvent::NoticeWrite(path) => Some(path),
+        notify::DebouncedEvent::NoticeRemove(path) => Some(path),
+        notify::DebouncedEvent::Create(path) => Some(path),
+        notify::DebouncedEvent::Write(path) => Some(path),
+        notify::DebouncedEvent::Chmod(path) => Some(path),
+        notify::DebouncedEvent::Remove(path) => Some(path),
+        notify::DebouncedEvent::Rename(from, _to) => Some(from),
+        notify::DebouncedEvent::Rescan => None,
+        notify::DebouncedEvent::Error(_, path) => path.map(|p| p.as_path()),
     }
 }
 
