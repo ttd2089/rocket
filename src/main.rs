@@ -1,11 +1,11 @@
 #[macro_use]
 extern crate clap;
-extern crate gitignore;
+extern crate ignore;
 extern crate notify;
 
 use clap::{App, Arg};
 use notify::{watcher, RecursiveMode, Watcher};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
@@ -35,13 +35,13 @@ fn main() {
         })
         .unwrap_or(".".to_string());
 
-    let filter = gitignore_filter(&dir);
-    println!("ignoring based on {}", filter.unwrap_or("nothing, AKA not ignoring".to_string()));
+    let filter: Option<&dyn PathFilter> = &gitignore_filter(&dir);
+    let filter = filter.unwrap_or_else(|| &NothingFilter{});
 
-    watch_directory(&dir);
+    watch_directory(&dir, filter);
 }
 
-fn watch_directory(dir: &str) {
+fn watch_directory(dir: &str, global_filter: &dyn PathFilter) {
     let (tx, rx) = channel();
 
     let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
@@ -50,13 +50,18 @@ fn watch_directory(dir: &str) {
 
     loop {
         match rx.recv() {
-            Ok(event) => println!("{:?}", event),
+            Ok(event) => {
+                match global_filter.exclude(event) {
+                    true => println!("ignoring {:?}", event),
+                    true => println!("caring about {:?}", event),
+                };
+            },
             Err(e) => println!("watch error: {:?}", e),
         }
     }
 }
 
-fn gitignore_filter(dir: &str) -> Option<String> {
+fn gitignore_filter(dir: &str) -> Option<GitignoreFilter> {
 
     // todo: is this an overridable convention we need to respect?
     const GITIGNORE_FILENAME: &str = ".gitignore";
@@ -69,14 +74,39 @@ fn gitignore_filter(dir: &str) -> Option<String> {
         gitignore_dir.push(GITIGNORE_FILENAME);
         println!("looking for {}", gitignore_dir.to_str()
             .expect("if you use an OS where paths aren't unicode, your mom's a hoe"));
-        let file = gitignore::File::new(gitignore_dir.as_path());
-        match file {
-            Ok(_) => return gitignore_dir.as_path().as_os_str().to_str().map(|s| s.to_string()),
-            Err(_) => {},
+        let ignorer = ignore::gitignore::Gitignore::new(gitignore_dir.as_path());
+        match ignorer {
+            (ignorer, None) => return Some(GitignoreFilter{ ignorer }),
+            _ => {},
         }
         let _ = gitignore_dir.pop();
         let _ = gitignore_dir.pop();
     }
 
     return None;
+}
+
+trait PathFilter {
+    fn exclude(&self, path: &Path) -> bool;
+}
+
+struct GitignoreFilter {
+    ignorer: ignore::gitignore::Gitignore
+}
+
+impl PathFilter for GitignoreFilter {
+    fn exclude(&self, path: &Path) -> bool {
+        match self.ignorer.matched(path, false) {
+            ignore::Match::Ignore(_) => true,
+            _ => false,
+        }
+    }
+}
+
+struct NothingFilter {}
+
+impl PathFilter for NothingFilter {
+    fn exclude(&self, _: &Path) -> bool {
+        return false;
+    }
 }
