@@ -80,7 +80,7 @@ fn get_default_shell() -> String
 
 #[cfg(target_family = "unix")]
 fn get_default_shell() -> String {
-    return "/usr/bin/env sh"
+    return "/usr/bin/env sh".into();
 }
 
 fn gitignore_filter(dir: &str) -> Option<String> {
