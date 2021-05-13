@@ -35,8 +35,7 @@ fn main() {
         })
         .unwrap_or(".".to_string());
 
-    let filter: &dyn PathFilter = &gitignore_filter(&dir).expect("boom");
-    watch_directory(&dir, filter);
+    watch_directory(&dir, &gitignore_filter(&dir));
 }
 
 fn watch_directory(dir: &str, global_filter: &dyn PathFilter) {
@@ -73,34 +72,48 @@ fn get_path(evt: &notify::DebouncedEvent) -> Option<&Path> {
         notify::DebouncedEvent::Chmod(path) => Some(path),
         notify::DebouncedEvent::Remove(path) => Some(path),
         notify::DebouncedEvent::Rename(from, _to) => Some(from),
-        notify::DebouncedEvent::Rescan => None,
-        notify::DebouncedEvent::Error(_, path) => path.map(|p| p.as_path()),
+        notify::DebouncedEvent::Error(_, Some(path)) => Some(path),
+        _ => None,
     }
 }
 
-fn gitignore_filter(dir: &str) -> Option<GitignoreFilter> {
+fn gitignore_filter(dir: &str) -> GitignoreFilter {
 
     // todo: is this an overridable convention we need to respect?
     const GITIGNORE_FILENAME: &str = ".gitignore";
 
+    let mut ignorers = Vec::new();
+
     let mut gitignore_dir = PathBuf::from(dir);
 
     while gitignore_dir.parent() != None {
+
+        let mut builder = ignore::gitignore::GitignoreBuilder::new(gitignore_dir.as_path());
+
         // Update the dir to have the file name instead of making a copy and we'll .pop() twice to
         // traverse upward to the parent dir.
         gitignore_dir.push(GITIGNORE_FILENAME);
         println!("looking for {}", gitignore_dir.to_str()
             .expect("if you use an OS where paths aren't unicode, your mom's a hoe"));
-        let ignorer = ignore::gitignore::Gitignore::new(gitignore_dir.as_path());
-        match ignorer {
-            (ignorer, None) => return Some(GitignoreFilter{ ignorer }),
-            _ => {},
+        let path = gitignore_dir.as_path();
+        println!("path = {:?}", path);
+
+        match builder.add(path) {
+            None => {
+                match builder.build() {
+                    Ok(ignorer) => ignorers.push(ignorer),
+                    Err(err) => println!("error building ignorer for {:?}: {:?}", path, err),
+                }
+            },
+            Some(err) => {
+                println!("error adding {:?}: {:?}", path, err);
+            },
         }
         let _ = gitignore_dir.pop();
         let _ = gitignore_dir.pop();
     }
 
-    return None;
+    return GitignoreFilter { ignorers };
 }
 
 trait PathFilter {
@@ -108,22 +121,21 @@ trait PathFilter {
 }
 
 struct GitignoreFilter {
-    ignorer: ignore::gitignore::Gitignore
+    ignorers: Vec<ignore::gitignore::Gitignore>
 }
 
 impl PathFilter for GitignoreFilter {
     fn exclude(&self, path: &Path) -> bool {
-        match self.ignorer.matched(path, false) {
-            ignore::Match::Ignore(_) => true,
-            _ => false,
+        for ignorer in &self.ignorers {
+            // todo: figure out how to distinguish files from directories
+            let resp = ignorer.matched(path, true);
+            println!("{:?}", resp);
+            match resp {
+                ignore::Match::Ignore(_) => return true,
+                ignore::Match::Whitelist(_) => return false,
+                _ => {},
+            }
         }
-    }
-}
-
-struct NothingFilter {}
-
-impl PathFilter for NothingFilter {
-    fn exclude(&self, _: &Path) -> bool {
         return false;
     }
 }
