@@ -3,74 +3,31 @@ extern crate clap;
 extern crate ignore;
 extern crate notify;
 
-use clap::{App, Arg};
 use std::path::PathBuf;
 
+mod cli_args;
 mod filters;
 mod rocket_watcher;
 
+use cli_args::*;
 use rocket_watcher::*;
 
 fn main() {
-    let default_shell = get_default_shell();
+    
+    let args = parse_args();
 
-    let matches = App::new("Rocket - Pocket rewritten in rust")
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about(crate_description!())
-        .arg(
-            Arg::with_name("change-directory")
-                .short("C")
-                .long("--change-directory")
-                .value_name("directory")
-                .help("Sets the working directory of the associated command"),
-        )
-        .arg(
-            Arg::with_name("shell")
-                .short("s")
-                .long("shell")
-                .value_name("shell")
-                .help("The shell that will be used to execute commands")
-                .default_value(&default_shell),
-        )
-        .arg(
-            Arg::with_name("log")
-                .short("l")
-                .long("log")
-                .help("Write application logs to stderr"),
-        )
-        .arg(
-            Arg::with_name("command")
-                .index(1)
-                .value_name("command")
-                .required(true),
-        )
-        .get_matches();
-
-    let dir = matches
-        .value_of("change-directory")
-        // todo: check that this is valid path and that the directory exists, right now we'll just
-        // fail when the first thing tries to use it.
-        .map(|s| s.to_string())
+    let dir = args
+        .change_directory
         .or_else(|| {
             std::env::current_dir()
                 .ok()
                 .and_then(|p| p.to_str().map(|s| s.to_string()))
         })
         .unwrap_or_else(|| ".".to_string());
+
     let filter = gitignore_filter(&dir);
     let watchy = RocketWatch::new(filter);
     watchy.watch_directory(&dir)
-}
-
-#[cfg(target_family = "windows")]
-fn get_default_shell() -> String {
-    return "pwsh.exe".into();
-}
-
-#[cfg(target_family = "unix")]
-fn get_default_shell() -> String {
-    return "/usr/bin/env sh".into();
 }
 
 fn gitignore_filter(dir: &str) -> GitignoreFilter {
