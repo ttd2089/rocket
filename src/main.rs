@@ -4,10 +4,12 @@ extern crate ignore;
 extern crate notify;
 
 use clap::{App, Arg};
-use notify::{watcher, RecursiveMode, Watcher};
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::channel;
-use std::time::Duration;
+use std::path::{PathBuf};
+
+mod rocket_watcher;
+mod filters;
+
+use rocket_watcher::*;
 
 fn main() {
     let matches = App::new("Rocket - Pocket rewritten in rust")
@@ -33,48 +35,10 @@ fn main() {
                 .ok()
                 .and_then(|p| p.to_str().map(|s| s.to_string()))
         })
-        .unwrap_or(".".to_string());
-
-    watch_directory(&dir, &gitignore_filter(&dir));
-}
-
-fn watch_directory(dir: &str, global_filter: &dyn PathFilter) {
-    let (tx, rx) = channel();
-
-    let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
-
-    watcher.watch(dir, RecursiveMode::Recursive).unwrap();
-
-    loop {
-        match rx.recv() {
-            Ok(event) => {
-                match get_path(&event) {
-                    Some(path) => {
-                        match global_filter.exclude(&path) {
-                            true => println!("ignoring {:?}", event),
-                            false => println!("caring about {:?}", event),
-                        };
-                    },
-                    None => println!("event had no path"),
-                }
-            },
-            Err(e) => println!("watch error: {:?}", e),
-        }
-    }
-}
-
-fn get_path(evt: &notify::DebouncedEvent) -> Option<&Path> {
-    match evt {
-        notify::DebouncedEvent::NoticeWrite(path) => Some(path),
-        notify::DebouncedEvent::NoticeRemove(path) => Some(path),
-        notify::DebouncedEvent::Create(path) => Some(path),
-        notify::DebouncedEvent::Write(path) => Some(path),
-        notify::DebouncedEvent::Chmod(path) => Some(path),
-        notify::DebouncedEvent::Remove(path) => Some(path),
-        notify::DebouncedEvent::Rename(from, _to) => Some(from),
-        notify::DebouncedEvent::Error(_, Some(path)) => Some(path),
-        _ => None,
-    }
+        .unwrap_or_else(|| ".".to_string());
+    let filter = gitignore_filter(&dir);
+    let watchy = RocketWatch::new(filter);
+    watchy.watch_directory(&dir)
 }
 
 fn gitignore_filter(dir: &str) -> GitignoreFilter {
@@ -113,29 +77,5 @@ fn gitignore_filter(dir: &str) -> GitignoreFilter {
         let _ = gitignore_dir.pop();
     }
 
-    return GitignoreFilter { ignorers };
-}
-
-trait PathFilter {
-    fn exclude(&self, path: &Path) -> bool;
-}
-
-struct GitignoreFilter {
-    ignorers: Vec<ignore::gitignore::Gitignore>
-}
-
-impl PathFilter for GitignoreFilter {
-    fn exclude(&self, path: &Path) -> bool {
-        for ignorer in &self.ignorers {
-            // todo: figure out how to distinguish files from directories
-            let resp = ignorer.matched(path, true);
-            println!("{:?}", resp);
-            match resp {
-                ignore::Match::Ignore(_) => return true,
-                ignore::Match::Whitelist(_) => return false,
-                _ => {},
-            }
-        }
-        return false;
-    }
+    GitignoreFilter::new(ignorers);
 }
