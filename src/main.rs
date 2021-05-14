@@ -13,7 +13,6 @@ use cli_args::*;
 use rocket_watcher::*;
 
 fn main() {
-    
     let args = parse_args();
 
     let dir = args

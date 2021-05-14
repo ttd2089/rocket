@@ -9,7 +9,6 @@ pub struct CliArgs {
 }
 
 pub fn parse_args() -> CliArgs {
-
     let default_shell = get_default_shell();
 
     let matches = App::new("Rocket - Pocket rewritten in rust")
@@ -37,16 +36,15 @@ pub fn parse_args() -> CliArgs {
                 .long("log")
                 .help("Write application logs to stderr"),
         )
-        .arg(
-            Arg::with_name("command")
-                .index(1)
-                .value_name("command")
-        )
+        .arg(Arg::with_name("command").index(1).value_name("command"))
         .get_matches();
 
     return CliArgs {
         change_directory: matches.value_of("change-directory").map(|s| s.to_string()),
-        shell: matches.value_of("shell").map(|s| s.to_string()).expect("no shell specified and no default known for current system"),
+        shell: matches
+            .value_of("shell")
+            .map(|s| s.to_string())
+            .expect("no shell specified and no default known for current system"),
         log: matches.occurrences_of("log") > 0,
         command: matches.value_of("command").map(|s| s.to_string()),
     };
