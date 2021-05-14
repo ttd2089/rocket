@@ -1,6 +1,6 @@
-use std::path::{Path};
-use std::sync::mpsc::channel;
 use notify::{watcher, RecursiveMode, Watcher};
+use std::path::Path;
+use std::sync::mpsc::channel;
 use std::time::Duration;
 
 pub trait PathFilter {
@@ -8,13 +8,12 @@ pub trait PathFilter {
 }
 
 pub struct GitignoreFilter {
-    ignorers: Vec<ignore::gitignore::Gitignore>
+    ignorers: Vec<ignore::gitignore::Gitignore>,
 }
 
-impl GitignoreFilter{
-    pub fn new( ignorers: Vec<ignore::gitignore::Gitignore>) -> GitignoreFilter
-    {
-        GitignoreFilter{ignorers}
+impl GitignoreFilter {
+    pub fn new(ignorers: Vec<ignore::gitignore::Gitignore>) -> GitignoreFilter {
+        GitignoreFilter { ignorers }
     }
 }
 
@@ -27,7 +26,7 @@ impl PathFilter for GitignoreFilter {
             match resp {
                 ignore::Match::Ignore(_) => return true,
                 ignore::Match::Whitelist(_) => return false,
-                _ => {},
+                _ => {}
             }
         }
         false
@@ -35,38 +34,36 @@ impl PathFilter for GitignoreFilter {
 }
 
 //He who watches
-pub struct RocketWatch<T : PathFilter>{
-    filter : T
+pub struct RocketWatch<T: PathFilter> {
+    filter: T,
 }
 
-impl<T:PathFilter> RocketWatch<T>{
+impl<T: PathFilter> RocketWatch<T> {
     pub fn watch_directory(self, dir: &str) {
         let (tx, rx) = channel();
-    
+
         let mut watcher = watcher(tx, Duration::from_secs(1)).unwrap();
-    
+
         watcher.watch(dir, RecursiveMode::Recursive).unwrap();
-    
+
         loop {
             match rx.recv() {
-                Ok(event) => {
-                    match get_path(&event) {
-                        Some(path) => {
-                            match self.filter.exclude(&path) {
-                                true => println!("ignoring {:?}", event),
-                                false => println!("caring about {:?}", event),
-                            };
-                        },
-                        None => println!("event had no path"),
+                Ok(event) => match get_path(&event) {
+                    Some(path) => {
+                        match self.filter.exclude(&path) {
+                            true => println!("ignoring {:?}", event),
+                            false => println!("caring about {:?}", event),
+                        };
                     }
+                    None => println!("event had no path"),
                 },
                 Err(e) => println!("watch error: {:?}", e),
             }
         }
     }
 
-    pub fn new(filter: T) -> RocketWatch<T>{
-        RocketWatch{filter}
+    pub fn new(filter: T) -> RocketWatch<T> {
+        RocketWatch { filter }
     }
 }
 
@@ -83,4 +80,3 @@ fn get_path(evt: &notify::DebouncedEvent) -> Option<&Path> {
         _ => None,
     }
 }
-
