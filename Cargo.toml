@@ -6,5 +6,5 @@ edition = "2018"
 
 [dependencies]
 clap   = "2.33.3"
-gitignore = "1.0.7"
+ignore = "0.4.17"
 notify = "4.0.16"
