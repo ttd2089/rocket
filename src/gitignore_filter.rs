@@ -16,28 +16,9 @@ impl GitignoreFilter {
     }
 
     pub fn build(mut dir: PathBuf) -> GitignoreFilter {
-        // Get all the child gitignores then add the parents.
-
-        let mut ignorers = get_all_gitignores(dir.as_path());
-
-        // We only want ancestors up to and including the root of the repo. If we don't find a root
-        // we'll ignore all the ancestors we found.
-        let mut ancestors = Vec::new();
-        let mut found_root = false;
-        while dir.pop() {
-            match get_gitignore(dir.as_path()) {
-                Some(ignorer) => ancestors.push(ignorer),
-                None => {}
-            }
-            if is_git_repo_root(&dir) {
-                found_root = true;
-                break;
-            }
-        }
-        if found_root {
-            ignorers.append(&mut ancestors);
-        }
-
+        let mut ignorers = get_gitignores_recursively(dir.as_path());
+        let mut ancestors = get_parent_gitignores(&dir);
+        ignorers.append(&mut ancestors);
         return GitignoreFilter::new(ignorers);
     }
 }
@@ -69,7 +50,7 @@ fn get_gitignore(dir: &Path) -> Option<ignore::gitignore::Gitignore> {
     }
 }
 
-fn get_all_gitignores(dir: &Path) -> Vec<ignore::gitignore::Gitignore> {
+fn get_gitignores_recursively(dir: &Path) -> Vec<ignore::gitignore::Gitignore> {
     let mut ignores = Vec::new();
     if !dir.is_dir() || path_in_git_metadata(dir) {
         return ignores;
@@ -89,13 +70,38 @@ fn get_all_gitignores(dir: &Path) -> Vec<ignore::gitignore::Gitignore> {
                 continue;
             }
         };
-        ignores.append(&mut get_all_gitignores(&entry.path()));
+        ignores.append(&mut get_gitignores_recursively(&entry.path()));
     }
     match get_gitignore(dir) {
         Some(ignorer) => ignores.push(ignorer),
         None => {}
     }
     return ignores;
+}
+
+fn get_parent_gitignores(dir: &Path) -> Vec<ignore::gitignore::Gitignore> {
+    // We only want ancestors up to and including the root of the containing repo. If we find that
+    // we're not in a git repo then we'll ignore all ancestors.
+    let mut ancestors = Vec::new();
+    if is_git_repo_root(dir) {
+        return ancestors;
+    }
+    let mut dir = dir.to_owned();
+    let mut found_root = false;
+    while dir.pop() {
+        match get_gitignore(&dir) {
+            Some(ignorer) => ancestors.push(ignorer),
+            None => {}
+        }
+        if is_git_repo_root(&dir) {
+            found_root = true;
+            break;
+        }
+    }
+    if found_root {
+        return ancestors;
+    }
+    return Vec::new();
 }
 
 fn path_in_git_metadata(path: &Path) -> bool {
