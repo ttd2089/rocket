@@ -7,32 +7,6 @@ pub trait PathFilter {
     fn exclude(&self, path: &Path) -> bool;
 }
 
-pub struct GitignoreFilter {
-    ignorers: Vec<ignore::gitignore::Gitignore>,
-}
-
-impl GitignoreFilter {
-    pub fn new(ignorers: Vec<ignore::gitignore::Gitignore>) -> GitignoreFilter {
-        GitignoreFilter { ignorers }
-    }
-}
-
-impl PathFilter for GitignoreFilter {
-    fn exclude(&self, path: &Path) -> bool {
-        for ignorer in &self.ignorers {
-            // todo: figure out how to distinguish files from directories
-            let resp = ignorer.matched(path, true);
-            println!("{:?}", resp);
-            match resp {
-                ignore::Match::Ignore(_) => return true,
-                ignore::Match::Whitelist(_) => return false,
-                _ => {}
-            }
-        }
-        false
-    }
-}
-
 //He who watches
 pub struct RocketWatch<T: PathFilter> {
     filter: T,
