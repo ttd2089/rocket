@@ -15,8 +15,8 @@ impl GitignoreFilter {
         GitignoreFilter { ignorers }
     }
 
-    pub fn build(mut dir: PathBuf) -> GitignoreFilter {
-        let mut ignorers = get_gitignores_recursively(dir.as_path());
+    pub fn build(dir: &Path) -> GitignoreFilter {
+        let mut ignorers = get_gitignores_recursively(dir);
         let mut ancestors = get_parent_gitignores(&dir);
         ignorers.append(&mut ancestors);
         return GitignoreFilter::new(ignorers);
