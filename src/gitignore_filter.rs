@@ -1,6 +1,6 @@
 use crate::rocket_watcher;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // todo: are these an overridable conventions we need to respect?
 const GITIGNORE_FILENAME: &str = ".gitignore";
