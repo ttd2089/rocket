@@ -35,7 +35,7 @@ fn main() {
         }
     };
 
-    let filter = GitignoreFilter::build(watch_dir.clone());
+    let filter = GitignoreFilter::build(&watch_dir);
     let watchy = RocketWatch::new(filter);
 
     watchy.watch_directory(
